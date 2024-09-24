@@ -125,3 +125,12 @@ src/ros_stereo_inertial.cc
 target_link_libraries(Stereo_Inertial
 ${LIBS}
 )
+
+# Node for RGBD-inertial camera
+rosbuild_add_executable(RGBD_Inertial
+src/ros_rgbd_inertial.cc
+)
+
+target_link_libraries(RGBD_Inertial
+${LIBS}
+)

@@ -50,6 +50,7 @@
 
 #include <opencv2/core/eigen.hpp>
 #include <Eigen/Geometry>
+#include <image_transport/image_transport.h>
 using namespace std;
 
 class ImageGrabber
@@ -66,7 +67,7 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "Mono");
     ros::start();
-
+    ros::NodeHandle nodeHandler;
     if(argc != 3)
     {
         cerr << endl << "Usage: rosrun ORB_SLAM3 Mono path_to_vocabulary path_to_settings" << endl;        
@@ -91,8 +92,12 @@ int main(int argc, char **argv)
 
     ImageGrabber igb(&SLAM);
 
-    ros::NodeHandle nodeHandler;
-    ros::Subscriber sub = nodeHandler.subscribe("/usb_cam/image_raw", 1, &ImageGrabber::GrabImage, &igb);
+    // 创建 image_transport 实例
+    image_transport::ImageTransport it(nodeHandler);
+
+    // 订阅 /hikrobot_camera/rgb 话题
+    image_transport::Subscriber sub = it.subscribe("/usb_cam/image_raw", 1, &ImageGrabber::GrabImage, &igb);
+
 
     ros::spin();
 
