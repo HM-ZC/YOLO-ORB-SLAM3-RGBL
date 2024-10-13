@@ -96,7 +96,7 @@ int main(int argc, char **argv)
   
   // Maximum delay, 5 seconds
   ros::Subscriber sub_imu = n.subscribe("/imu", 1000, &ImuGrabber::GrabImu, &imugb); 
-  ros::Subscriber sub_img0 = n.subscribe("/camera/image_raw", 100, &ImageGrabber::GrabImage,&igb);
+  ros::Subscriber sub_img0 = n.subscribe("/usb_cam/image_raw", 100, &ImageGrabber::GrabImage,&igb);
 
   std::thread sync_thread(&ImageGrabber::SyncWithImu,&igb);
 

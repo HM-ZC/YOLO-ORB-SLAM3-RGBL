@@ -93,6 +93,7 @@ add_library(${PROJECT_NAME} SHARED
         src/MLPnPsolver.cpp
         src/GeometricTools.cc
         src/TwoViewReconstruction.cc
+        src/DepthModule.cc
         src/Config.cc
         src/Settings.cc
         src/YoloDetect.cpp
@@ -126,7 +127,9 @@ add_library(${PROJECT_NAME} SHARED
         include/SerializationUtils.h
         include/Config.h
         include/Settings.h
-        include/YoloDetect.h)
+        include/YoloDetect.h
+        include/DepthModule.h
+        )
 
 add_subdirectory(Thirdparty/g2o)
 

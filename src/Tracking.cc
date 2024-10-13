@@ -568,12 +568,12 @@ void Tracking::newParameterLoader(Settings *settings) {
         mpFrameDrawer->both = true;
     }
 
-    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD ){
+    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD|| mSensor==System::RGBL  ){
         mbf = settings->bf();
         mThDepth = settings->b() * settings->thDepth();
     }
 
-    if(mSensor==System::RGBD || mSensor==System::IMU_RGBD){
+    if(mSensor==System::RGBD || mSensor==System::IMU_RGBD|| mSensor==System::RGBL){
         mDepthMapFactor = settings->depthMapFactor();
         if(fabs(mDepthMapFactor)<1e-5)
             mDepthMapFactor=1;
@@ -1130,7 +1130,7 @@ bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
         std::cerr << "Check an example configuration file with the desired sensor" << std::endl;
     }
 
-    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD )
+    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD|| mSensor==System::RGBL )
     {
         cv::FileNode node = fSettings["Camera.bf"];
         if(!node.empty() && node.isReal())
@@ -1168,10 +1168,10 @@ bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
     else
         cout << "- color order: BGR (ignored if grayscale)" << endl;
 
-    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD)
+    if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD|| mSensor==System::RGBL)
     {
         float fx = mpCamera->getParameter(0);
-        cv::FileNode node = fSettings["ThDepth"];
+        cv::FileNode node = fSettings["Stereo.ThDepth"];
         if(!node.empty()  && node.isReal())
         {
             mThDepth = node.real();
@@ -1180,16 +1180,16 @@ bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
         }
         else
         {
-            std::cerr << "*ThDepth parameter doesn't exist or is not a real number*" << std::endl;
+            std::cerr << "*Stereo.ThDepth parameter doesn't exist or is not a real number*" << std::endl;
             b_miss_params = true;
         }
 
 
     }
 
-    if(mSensor==System::RGBD || mSensor==System::IMU_RGBD)
+    if(mSensor==System::RGBD || mSensor==System::IMU_RGBD|| mSensor==System::RGBL)
     {
-        cv::FileNode node = fSettings["DepthMapFactor"];
+        cv::FileNode node = fSettings["RGBD.DepthMapFactor"];
         if(!node.empty() && node.isReal())
         {
             mDepthMapFactor = node.real();
@@ -1200,7 +1200,7 @@ bool Tracking::ParseCamParamFile(cv::FileStorage &fSettings)
         }
         else
         {
-            std::cerr << "*DepthMapFactor parameter doesn't exist or is not a real number*" << std::endl;
+            std::cerr << "*RGBD.DepthMapFactor parameter doesn't exist or is not a real number*" << std::endl;
             b_miss_params = true;
         }
 
@@ -1580,7 +1580,52 @@ Sophus::SE3f Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, co
     return mCurrentFrame.GetPose();
 }
 
+Sophus::SE3f Tracking::GrabImageRGBL(const cv::Mat &imRGB,const cv::Mat& PointCloud, DepthModule& DepthHandler, const double &timestamp, string filename)
+{
+    mImGray = imRGB;
+    // Yolo
+    cv::Mat InputImage;
+    InputImage = imRGB.clone();
+    mpDetector->GetImage(InputImage);
+    mpDetector->Detect();
+    mpORBextractorLeft->mvDynamicArea = mpDetector->mvDynamicArea;
+    {
+        std::unique_lock<std::mutex> lock(mpViewer->mMutexPAFinsh);
+        mpViewer->mmDetectMap = mpDetector->mmDetectMap;
+    }
+    mpDetector->mvDynamicArea.clear();
+    mpDetector->mmDetectMap.clear();
+    if(mImGray.channels()==3)
+    {
+        if(mbRGB)
+            cvtColor(mImGray,mImGray,cv::COLOR_RGB2GRAY);
+        else
+            cvtColor(mImGray,mImGray,cv::COLOR_BGR2GRAY);
+    }
+    else if(mImGray.channels()==4)
+    {
+        if(mbRGB)
+            cvtColor(mImGray,mImGray,cv::COLOR_RGBA2GRAY);
+        else
+            cvtColor(mImGray,mImGray,cv::COLOR_BGRA2GRAY);
+    }
 
+    mCurrentFrame = Frame(mImGray, PointCloud,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth,mpCamera, &DepthHandler);
+
+    imDepth = mCurrentFrame.DepthHandler->ProcessedDepthMap;
+
+    mCurrentFrame.mNameFile = filename;
+    mCurrentFrame.mnDataset = mnNumDataset;
+
+#ifdef REGISTER_TIMES
+    vdORBExtract_ms.push_back(mCurrentFrame.mTimeORB_Ext);
+#endif
+
+    Track();
+
+    // return mCurrentFrame.mTcw.clone();
+    return mCurrentFrame.GetPose();
+}
 Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &imRGB, const double &timestamp, string filename)
 {
     mImGray = imRGB;
@@ -1929,7 +1974,7 @@ void Tracking::Track()
 
     if(mState==NOT_INITIALIZED)
     {
-        if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD)
+        if(mSensor==System::STEREO || mSensor==System::RGBD || mSensor==System::IMU_STEREO || mSensor==System::IMU_RGBD|| mSensor==System::RGBL)
         {
             StereoInitialization();
         }
@@ -3420,7 +3465,7 @@ void Tracking::SearchLocalPoints()
     {
         ORBmatcher matcher(0.8);
         int th = 1;
-        if(mSensor==System::RGBD || mSensor==System::IMU_RGBD)
+        if(mSensor==System::RGBD || mSensor==System::IMU_RGBD|| mSensor==System::RGBL)
             th=3;
         if(mpAtlas->isImuInitialized())
         {

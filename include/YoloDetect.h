@@ -31,6 +31,8 @@ public:
     void ClearImage();
     bool Detect();
     void ClearArea();
+    // 新增的 getter 方法，用于获取检测到的区域
+    std::vector<cv::Rect> GetDetectedObjects() const;
     vector<cv::Rect2i> mvPersonArea; // 存储检测到的人物区域
     vector<torch::Tensor> non_max_suppression(torch::Tensor preds, float score_thresh=0.5, float iou_thresh=0.5);
 

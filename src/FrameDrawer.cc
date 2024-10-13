@@ -370,12 +370,21 @@ void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 void FrameDrawer::Update(Tracking *pTracker)
 {
     unique_lock<mutex> lock(mMutex);
-    pTracker->mImGray.copyTo(mIm);
+    if (pTracker->mSensor == System::eSensor::RGBL){  //|| pTracker->mSensor == System::eSensor::RGBD){
+        // pTracker->imDepth.copyTo(mIm);
+        mIm = ImageDepthmapOverlay(pTracker->mImGray, pTracker->imDepth, 100);
+    }else{
+        pTracker->mImGray.copyTo(mIm);
+    }
     mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
     mThDepth = pTracker->mCurrentFrame.mThDepth;
     mvCurrentDepth = pTracker->mCurrentFrame.mvDepth;
-
+    bool bShowDepth = true;
     if(both){
+        mvCurrentKeysRight = pTracker->mCurrentFrame.mvKeysRight;
+        pTracker->mImRight.copyTo(mImRight);
+        N = mvCurrentKeys.size() + mvCurrentKeysRight.size();
+    }else if(bShowDepth){
         mvCurrentKeysRight = pTracker->mCurrentFrame.mvKeysRight;
         pTracker->mImRight.copyTo(mImRight);
         N = mvCurrentKeys.size() + mvCurrentKeysRight.size();
@@ -413,27 +422,60 @@ void FrameDrawer::Update(Tracking *pTracker)
         for(int i=0;i<N;i++)
         {
             MapPoint* pMP = pTracker->mCurrentFrame.mvpMapPoints[i];
+            if (pTracker->mSensor != System::eSensor::STEREO){
             if(pMP)
             {
                 if(!pTracker->mCurrentFrame.mvbOutlier[i])
                 {
                     if(pMP->Observations()>0)
+                        {
                         mvbMap[i]=true;
+                        }
                     else
+                        {
                         mvbVO[i]=true;
-
+                        }
                     mmMatchedInImage[pMP->mnId] = mvCurrentKeys[i].pt;
                 }
                 else
                 {
                     mvpOutlierMPs.push_back(pMP);
                     mvOutlierKeys.push_back(mvCurrentKeys[i]);
+                    }
                 }
             }
         }
 
     }
     mState=static_cast<int>(pTracker->mLastProcessedState);
+}
+
+cv::Mat FrameDrawer::ImageDepthmapOverlay(cv::Mat &img, cv::Mat &Depthmap, const int maxVal){
+    // Create an overlay image of a camera image and the depthmap created for it.
+    // MaxVal is required for the scaling of the colormap and should be max_dist * depthfactor from the projection
+
+    cv::Mat Overlay;
+
+    // // Transform images to same format
+    // cv::Mat img_CV_16UC3, Depthmap_CV_16UC3;
+    cv::Mat img_C3;
+    img.convertTo(img_C3, CV_8U);
+    cvtColor(img_C3, img_C3, cv::COLOR_GRAY2BGR);
+
+    // Transform Depthmap to Colormap
+    // Overlay = ConvertToHeatmap(Depthmap, maxVal);
+    cv::Mat srcTrueDepth8U;
+    Depthmap.convertTo(srcTrueDepth8U, CV_8U, 1.0/maxVal * 255.0);
+
+    applyColorMap(srcTrueDepth8U, Overlay, cv::COLORMAP_HSV);
+
+    // Perform Overlay
+    float alpha, beta;
+    alpha = 0.75;
+    beta = (1-alpha);
+    addWeighted(img_C3, alpha, Overlay, beta, 0.0, Overlay);
+
+    return Overlay;
 }
 
 } //namespace ORB_SLAM
